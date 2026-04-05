@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <title>יומן מבצעים - עמדת יומנאי</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #ece5dd; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+    #chat-box { flex-grow: 1; background: #ffffff; border: 1px solid #ccc; border-radius: 8px; padding: 15px; overflow-y: auto; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+    .message { margin-bottom: 10px; padding: 10px 15px; border-radius: 15px; background: #dcf8c6; align-self: flex-start; max-width: 80%; font-size: 16px; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+    .system-msg { background: #f0f0f0; font-size: 0.9em; color: #555; align-self: center; border-radius: 5px; border: 1px solid #ddd; padding: 5px 15px; text-align: center; }
+    .input-area { display: flex; gap: 10px; align-items: center; }
+    input[type="text"] { flex-grow: 1; padding: 15px; border: 1px solid #ccc; border-radius: 24px; font-size: 16px; outline: none; transition: background 0.3s; }
+    button { padding: 10px 25px; background: #008f68; color: white; border: none; border-radius: 24px; cursor: pointer; font-size: 16px; font-weight: bold; }
+    
+    /* PTT Button */
+    .ptt-btn { padding: 12px 20px; font-size: 16px; background: #0288d1; color: white; border: none; border-radius: 24px; cursor: pointer; user-select: none; transition: background 0.2s; white-space: nowrap; }
+    .ptt-btn.recording { background: #d32f2f; box-shadow: 0 0 10px rgba(211,47,47,0.5); }
+    
+    .loader-msg { background: #e1f5fe; color: #0277bd; border: 1px solid #b3e5fc; }
+  </style>
+</head>
+<body>
+  <h2 style="margin-top:0; color: #333;">יומן מבצעים - הזנה חיצונית</h2>
+  <div id="chat-box">
+    <div class="message system-msg">המערכת מוכנה. הקלד או החזק את כפתור המיקרופון כדי לדבר.</div>
+  </div>
+  <div class="input-area">
+    <button id="pttBtn" class="ptt-btn">🎤 PTT</button>
+    <input type="text" id="reportInput" placeholder="הקלד או דבר..." onkeypress="handleKeyPress(event)" autofocus>
+    <button onclick="sendReport()">שלח</button>
+  </div>
+
+  <script>
+    // הגדרות מיקרופון PTT
+    var pttBtn = document.getElementById('pttBtn');
+    var inputField = document.getElementById("reportInput");
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var recognition = null;
+    var isRecording = false;
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'he-IL';
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      recognition.onresult = function(event) {
+        var transcript = '';
+        for (var i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+        inputField.value = transcript;
+      };
+
+      function startRecording(e) {
+        e.preventDefault();
+        isRecording = true;
+        pttBtn.classList.add('recording');
+        pttBtn.innerHTML = '🔴 מקשיב...';
+        inputField.value = '';
+        try { recognition.start(); } catch(e) {}
+      }
+
+      function stopRecording(e) {
+        e.preventDefault();
+        if(!isRecording) return;
+        isRecording = false;
+        pttBtn.classList.remove('recording');
+        pttBtn.innerHTML = '🎤 PTT';
+        recognition.stop();
+      }
+
+      pttBtn.addEventListener('mousedown', startRecording);
+      window.addEventListener('mouseup', stopRecording);
+    } else {
+      pttBtn.style.display = 'none'; // הסתר אם הדפדפן לא תומך
+    }
+
+    // הגדרות שליחה לשרת
+    function handleKeyPress(e) { if (e.keyCode === 13) sendReport(); }
+
+    function appendMessage(text, isSystem) {
+      var chatBox = document.getElementById("chat-box");
+      var msgDiv = document.createElement("div");
+      msgDiv.className = "message " + (isSystem ? "system-msg loader-msg" : "");
+      msgDiv.textContent = text;
+      chatBox.appendChild(msgDiv);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function sendReport() {
+      var originalText = inputField.value.trim();
+      if (originalText === "") return;
+
+      appendMessage(originalText, false);
+      inputField.value = ""; 
+      appendMessage("שולח לשרת...", true); // חיווי זמני
+
+      // --- חשוב: הדבק כאן את הקישור שהעתקת מגוגל! ---
+      var googleScriptUrl = "https://script.google.com/macros/s/AKfycbz4QTkf2JQssN76pgX0CGjhJpdCFUdiZH4job1kETYBcTuOlrASVHw4LD0yScAohtfBdg/exec"; 
+
+      fetch(googleScriptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "text=" + encodeURIComponent(originalText)
+      })
+      .then(response => response.text())
+      .then(result => {
+        // מסיר את הודעת "שולח לשרת"
+        var chatBox = document.getElementById("chat-box");
+        chatBox.removeChild(chatBox.lastChild); 
+        
+        if (result && result !== "נרשם") {
+           appendMessage(result, true);
+        }
+      })
+      .catch(error => {
+        appendMessage("שגיאת תקשורת: " + error.message, true);
+      });
+    }
+  </script>
+</body>
+</html>
